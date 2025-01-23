@@ -16,12 +16,14 @@ use Illuminate\Support\LazyCollection;
 use Illuminate\Support\MultipleItemsFoundException;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
+use IteratorAggregate;
 use JsonSerializable;
 use Mockery as m;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use stdClass;
 use Symfony\Component\VarDumper\VarDumper;
+use Traversable;
 use UnexpectedValueException;
 
 if (PHP_VERSION_ID >= 80100) {
@@ -621,6 +623,11 @@ class SupportCollectionTest extends TestCase
         $items = new TestJsonSerializeWithScalarValueObject;
         $array = $method->invokeArgs($data, [$items]);
         $this->assertSame(['foo'], $array);
+
+        $subject = [new stdClass, new stdClass];
+        $items = new TestTraversableAndJsonSerializableObject($subject);
+        $array = $method->invokeArgs($data, [$items]);
+        $this->assertSame($subject, $array);
 
         $items = new $collection(['foo' => 'bar']);
         $array = $method->invokeArgs($data, [$items]);
@@ -1691,6 +1698,68 @@ class SupportCollectionTest extends TestCase
     {
         $c = new $collection(['id' => 1, 'first_word' => 'Hello']);
         $this->assertEquals(['first_word' => 'Hello'], $c->intersect(new $collection(['first_world' => 'Hello', 'last_word' => 'World']))->all());
+    }
+
+    /**
+     * @dataProvider collectionClassProvider
+     */
+    public function testIntersectUsingWithNull($collection)
+    {
+        $collect = new $collection(['green', 'brown', 'blue']);
+
+        $this->assertEquals([], $collect->intersectUsing(null, 'strcasecmp')->all());
+    }
+
+    /**
+     * @dataProvider collectionClassProvider
+     */
+    public function testIntersectUsingCollection($collection)
+    {
+        $collect = new $collection(['green', 'brown', 'blue']);
+
+        $this->assertEquals(['green', 'brown'], $collect->intersectUsing(new $collection(['GREEN', 'brown', 'yellow']), 'strcasecmp')->all());
+    }
+
+    /**
+     * @dataProvider collectionClassProvider
+     */
+    public function testIntersectAssocWithNull($collection)
+    {
+        $array1 = new $collection(['a' => 'green', 'b' => 'brown', 'c' => 'blue', 'red']);
+
+        $this->assertEquals([], $array1->intersectAssoc(null)->all());
+    }
+
+    /**
+     * @dataProvider collectionClassProvider
+     */
+    public function testIntersectAssocCollection($collection)
+    {
+        $array1 = new $collection(['a' => 'green', 'b' => 'brown', 'c' => 'blue', 'red']);
+        $array2 = new $collection(['a' => 'green', 'b' => 'yellow', 'blue', 'red']);
+
+        $this->assertEquals(['a' => 'green'], $array1->intersectAssoc($array2)->all());
+    }
+
+    /**
+     * @dataProvider collectionClassProvider
+     */
+    public function testIntersectAssocUsingWithNull($collection)
+    {
+        $array1 = new $collection(['a' => 'green', 'b' => 'brown', 'c' => 'blue', 'red']);
+
+        $this->assertEquals([], $array1->intersectAssocUsing(null, 'strcasecmp')->all());
+    }
+
+    /**
+     * @dataProvider collectionClassProvider
+     */
+    public function testIntersectAssocUsingCollection($collection)
+    {
+        $array1 = new $collection(['a' => 'green', 'b' => 'brown', 'c' => 'blue', 'red']);
+        $array2 = new $collection(['a' => 'GREEN', 'B' => 'brown', 'yellow', 'red']);
+
+        $this->assertEquals(['b' => 'brown'], $array1->intersectAssocUsing($array2, 'strcasecmp')->all());
     }
 
     /**
@@ -4613,6 +4682,7 @@ class SupportCollectionTest extends TestCase
 
     /**
      * @dataProvider collectionClassProvider
+     *
      * @requires PHP >= 8.1
      */
     public function testCollectionFromEnum($collection)
@@ -4623,6 +4693,7 @@ class SupportCollectionTest extends TestCase
 
     /**
      * @dataProvider collectionClassProvider
+     *
      * @requires PHP >= 8.1
      */
     public function testCollectionFromBackedEnum($collection)
@@ -5457,7 +5528,7 @@ class SupportCollectionTest extends TestCase
      *
      * @return array
      */
-    public function collectionClassProvider()
+    public static function collectionClassProvider()
     {
         return [
             [Collection::class],
@@ -5589,6 +5660,26 @@ class TestJsonSerializeWithScalarValueObject implements JsonSerializable
     public function jsonSerialize(): string
     {
         return 'foo';
+    }
+}
+
+class TestTraversableAndJsonSerializableObject implements IteratorAggregate, JsonSerializable
+{
+    public $items;
+
+    public function __construct($items)
+    {
+        $this->items = $items;
+    }
+
+    public function getIterator(): Traversable
+    {
+        return new ArrayIterator($this->items);
+    }
+
+    public function jsonSerialize(): array
+    {
+        return json_decode(json_encode($this->items), true);
     }
 }
 

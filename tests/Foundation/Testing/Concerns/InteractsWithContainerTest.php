@@ -25,6 +25,14 @@ class InteractsWithContainerTest extends TestCase
         $this->assertSame($this, $instance);
     }
 
+    public function testWithoutViteHandlesAsset()
+    {
+        $instance = $this->withoutVite();
+
+        $this->assertSame('', app(Vite::class)->asset('path/to/asset.png'));
+        $this->assertSame($this, $instance);
+    }
+
     public function testWithViteRestoresOriginalHandlerAndReturnsInstance()
     {
         $handler = new stdClass;
@@ -37,11 +45,19 @@ class InteractsWithContainerTest extends TestCase
         $this->assertSame($this, $instance);
     }
 
+    public function testWithoutViteReturnsEmptyArrayForPreloadedAssets(): void
+    {
+        $instance = $this->withoutVite();
+
+        $this->assertSame([], app(Vite::class)->preloadedAssets());
+        $this->assertSame($this, $instance);
+    }
+
     public function testWithoutMixBindsEmptyHandlerAndReturnsInstance()
     {
         $instance = $this->withoutMix();
 
-        $this->assertSame('', mix('path/to/asset.png'));
+        $this->assertSame('', (string) mix('path/to/asset.png'));
         $this->assertSame($this, $instance);
     }
 

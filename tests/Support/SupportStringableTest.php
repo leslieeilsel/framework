@@ -2,6 +2,7 @@
 
 namespace Illuminate\Tests\Support;
 
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\HtmlString;
 use Illuminate\Support\Stringable;
@@ -38,6 +39,12 @@ class SupportStringableTest extends TestCase
         $this->assertFalse($this->stringable('2cdc7039-65a6-4ac7-8e5d-d554a98')->isUuid());
     }
 
+    public function testIsUlid()
+    {
+        $this->assertTrue($this->stringable('01GJSNW9MAF792C0XYY8RX6QFT')->isUlid());
+        $this->assertFalse($this->stringable('01GJSNW9MAF-792C0XYY8RX6ssssss-QFT')->isUlid());
+    }
+
     public function testIsJson()
     {
         $this->assertTrue($this->stringable('1')->isJson());
@@ -60,6 +67,12 @@ class SupportStringableTest extends TestCase
         $this->assertTrue($this->stringable('')->isEmpty());
         $this->assertFalse($this->stringable('A')->isEmpty());
         $this->assertFalse($this->stringable('0')->isEmpty());
+    }
+
+    public function testIsNotEmpty()
+    {
+        $this->assertFalse($this->stringable('')->isNotEmpty());
+        $this->assertTrue($this->stringable('A')->isNotEmpty());
     }
 
     public function testPluralStudly()
@@ -167,6 +180,18 @@ class SupportStringableTest extends TestCase
         }));
     }
 
+    public function testDirname()
+    {
+        $this->assertSame('/framework/tests', (string) $this->stringable('/framework/tests/Support')->dirname());
+        $this->assertSame('/framework', (string) $this->stringable('/framework/tests/Support')->dirname(2));
+        $this->assertSame('.', (string) $this->stringable('framework')->dirname());
+
+        $this->assertSame('.', (string) $this->stringable('.')->dirname());
+
+        $this->assertSame(DIRECTORY_SEPARATOR, (string) $this->stringable('/framework/')->dirname());
+        $this->assertSame(DIRECTORY_SEPARATOR, (string) $this->stringable('/')->dirname());
+    }
+
     public function testUcsplitOnStringable()
     {
         $this->assertSame(['Taylor', 'Otwell'], $this->stringable('TaylorOtwell')->ucsplit()->toArray());
@@ -216,6 +241,23 @@ class SupportStringableTest extends TestCase
         $this->assertSame('Tony Stark', (string) $this->stringable('Tony Stark')->whenExactly('Iron Man', function ($stringable) {
             return 'Nailed it...!';
         }));
+    }
+
+    public function testWhenNotExactly()
+    {
+        $this->assertSame(
+            'Iron Man',
+            (string) $this->stringable('Tony')->whenNotExactly('Tony Stark', function ($stringable) {
+                return 'Iron Man';
+            }));
+
+        $this->assertSame(
+            'Swing and a miss...!',
+            (string) $this->stringable('Tony Stark')->whenNotExactly('Tony Stark', function ($stringable) {
+                return 'Iron Man';
+            }, function ($stringable) {
+                return 'Swing and a miss...!';
+            }));
     }
 
     public function testWhenIs()
@@ -276,6 +318,25 @@ class SupportStringableTest extends TestCase
             return $stringable->prepend('Uuid: ');
         }, function ($stringable) {
             return $stringable->prepend('Not Uuid: ');
+        }));
+    }
+
+    public function testWhenIsUlid()
+    {
+        $this->assertSame('Ulid: 01GJSNW9MAF792C0XYY8RX6QFT', (string) $this->stringable('01GJSNW9MAF792C0XYY8RX6QFT')->whenIsUlid(function ($stringable) {
+            return $stringable->prepend('Ulid: ');
+        }, function ($stringable) {
+            return $stringable->prepend('Not Ulid: ');
+        }));
+
+        $this->assertSame('2cdc7039-65a6-4ac7-8e5d-d554a98', (string) $this->stringable('2cdc7039-65a6-4ac7-8e5d-d554a98')->whenIsUlid(function ($stringable) {
+            return $stringable->prepend('Ulid: ');
+        }));
+
+        $this->assertSame('Not Ulid: ss-01GJSNW9MAF792C0XYY8RX6QFT', (string) $this->stringable('ss-01GJSNW9MAF792C0XYY8RX6QFT')->whenIsUlid(function ($stringable) {
+            return $stringable->prepend('Ulid: ');
+        }, function ($stringable) {
+            return $stringable->prepend('Not Ulid: ');
         }));
     }
 
@@ -454,6 +515,7 @@ class SupportStringableTest extends TestCase
         $this->assertTrue($this->stringable('jason')->startsWith('jason'));
         $this->assertTrue($this->stringable('jason')->startsWith(['jas']));
         $this->assertTrue($this->stringable('jason')->startsWith(['day', 'jas']));
+        $this->assertTrue($this->stringable('jason')->startsWith(collect(['day', 'jas'])));
         $this->assertFalse($this->stringable('jason')->startsWith('day'));
         $this->assertFalse($this->stringable('jason')->startsWith(['day']));
         $this->assertFalse($this->stringable('jason')->startsWith(null));
@@ -483,6 +545,7 @@ class SupportStringableTest extends TestCase
         $this->assertTrue($this->stringable('jason')->endsWith('jason'));
         $this->assertTrue($this->stringable('jason')->endsWith(['on']));
         $this->assertTrue($this->stringable('jason')->endsWith(['no', 'on']));
+        $this->assertTrue($this->stringable('jason')->endsWith(collect(['no', 'on'])));
         $this->assertFalse($this->stringable('jason')->endsWith('no'));
         $this->assertFalse($this->stringable('jason')->endsWith(['no']));
         $this->assertFalse($this->stringable('jason')->endsWith(''));
@@ -596,6 +659,8 @@ class SupportStringableTest extends TestCase
         $this->assertTrue($this->stringable('taylor')->contains('taylor'));
         $this->assertTrue($this->stringable('taylor')->contains(['ylo']));
         $this->assertTrue($this->stringable('taylor')->contains(['xxx', 'ylo']));
+        $this->assertTrue($this->stringable('taylor')->contains(collect(['xxx', 'ylo'])));
+        $this->assertTrue($this->stringable('taylor')->contains(['LOR'], true));
         $this->assertFalse($this->stringable('taylor')->contains('xxx'));
         $this->assertFalse($this->stringable('taylor')->contains(['xxx']));
         $this->assertFalse($this->stringable('taylor')->contains(''));
@@ -604,6 +669,8 @@ class SupportStringableTest extends TestCase
     public function testContainsAll()
     {
         $this->assertTrue($this->stringable('taylor otwell')->containsAll(['taylor', 'otwell']));
+        $this->assertTrue($this->stringable('taylor otwell')->containsAll(['TAYLOR', 'OTWELL'], true));
+        $this->assertTrue($this->stringable('taylor otwell')->containsAll(collect(['taylor', 'otwell'])));
         $this->assertTrue($this->stringable('taylor otwell')->containsAll(['taylor']));
         $this->assertFalse($this->stringable('taylor otwell')->containsAll(['taylor', 'xxx']));
     }
@@ -743,6 +810,7 @@ class SupportStringableTest extends TestCase
         $this->assertSame('bar/bar', (string) $this->stringable('?/?')->replace('?', 'bar'));
         $this->assertSame('?/?/?', (string) $this->stringable('? ? ?')->replace(' ', '/'));
         $this->assertSame('foo/bar/baz/bam', (string) $this->stringable('?1/?2/?3/?4')->replace(['?1', '?2', '?3', '?4'], ['foo', 'bar', 'baz', 'bam']));
+        $this->assertSame('foo/bar/baz/bam', (string) $this->stringable('?1/?2/?3/?4')->replace(collect(['?1', '?2', '?3', '?4']), collect(['foo', 'bar', 'baz', 'bam'])));
     }
 
     public function testReplaceArray()
@@ -754,6 +822,7 @@ class SupportStringableTest extends TestCase
         $this->assertSame('foo?/bar/baz', (string) $this->stringable('?/?/?')->replaceArray('?', ['foo?', 'bar', 'baz']));
         $this->assertSame('foo/bar', (string) $this->stringable('?/?')->replaceArray('?', [1 => 'foo', 2 => 'bar']));
         $this->assertSame('foo/bar', (string) $this->stringable('?/?')->replaceArray('?', ['x' => 'foo', 'y' => 'bar']));
+        $this->assertSame('foo/bar', (string) $this->stringable('?/?')->replaceArray('?', collect(['x' => 'foo', 'y' => 'bar'])));
     }
 
     public function testReplaceFirst()
@@ -789,6 +858,7 @@ class SupportStringableTest extends TestCase
         $this->assertSame('oobar', (string) $this->stringable('Foobar')->remove('f', false));
 
         $this->assertSame('Fbr', (string) $this->stringable('Foobar')->remove(['o', 'a']));
+        $this->assertSame('Fbr', (string) $this->stringable('Foobar')->remove(collect(['o', 'a'])));
         $this->assertSame('Fooar', (string) $this->stringable('Foobar')->remove(['f', 'b']));
         $this->assertSame('ooar', (string) $this->stringable('Foobar')->remove(['f', 'b'], false));
         $this->assertSame('Foobar', (string) $this->stringable('Foo|bar')->remove(['f', '|']));
@@ -911,6 +981,17 @@ class SupportStringableTest extends TestCase
         $this->assertSame('Alien-----', (string) $this->stringable('Alien')->padRight(10, '-'));
         $this->assertSame('Alien     ', (string) $this->stringable('Alien')->padRight(10));
         $this->assertSame('❤MultiByte☆     ', (string) $this->stringable('❤MultiByte☆')->padRight(16));
+    }
+
+    public function testExplode()
+    {
+        $this->assertInstanceOf(Collection::class, $this->stringable('Foo Bar Baz')->explode(' '));
+
+        $this->assertSame('["Foo","Bar","Baz"]', (string) $this->stringable('Foo Bar Baz')->explode(' '));
+
+        //  with limit
+        $this->assertSame('["Foo","Bar Baz"]', (string) $this->stringable('Foo Bar Baz')->explode(' ', 2));
+        $this->assertSame('["Foo","Bar"]', (string) $this->stringable('Foo Bar Baz')->explode(' ', -1));
     }
 
     public function testChunk()
@@ -1042,5 +1123,60 @@ class SupportStringableTest extends TestCase
         $this->assertFalse($this->stringable('Foo')->exactly('foo'));
         $this->assertFalse($this->stringable('[]')->exactly([]));
         $this->assertFalse($this->stringable('0')->exactly(0));
+    }
+
+    public function testToInteger()
+    {
+        $this->assertSame(123, $this->stringable('123')->toInteger());
+        $this->assertSame(456, $this->stringable(456)->toInteger());
+        $this->assertSame(78, $this->stringable('078')->toInteger());
+        $this->assertSame(901, $this->stringable(' 901')->toInteger());
+        $this->assertSame(0, $this->stringable('nan')->toInteger());
+        $this->assertSame(1, $this->stringable('1ab')->toInteger());
+        $this->assertSame(2, $this->stringable('2_000')->toInteger());
+    }
+
+    public function testToFloat()
+    {
+        $this->assertSame(1.23, $this->stringable('1.23')->toFloat());
+        $this->assertSame(45.6, $this->stringable(45.6)->toFloat());
+        $this->assertSame(.6, $this->stringable('.6')->toFloat());
+        $this->assertSame(0.78, $this->stringable('0.78')->toFloat());
+        $this->assertSame(90.1, $this->stringable(' 90.1')->toFloat());
+        $this->assertSame(0.0, $this->stringable('nan')->toFloat());
+        $this->assertSame(1.0, $this->stringable('1.ab')->toFloat());
+        $this->assertSame(1e3, $this->stringable('1e3')->toFloat());
+    }
+
+    public function testBooleanMethod()
+    {
+        $this->assertTrue($this->stringable(true)->toBoolean());
+        $this->assertTrue($this->stringable('true')->toBoolean());
+        $this->assertFalse($this->stringable('false')->toBoolean());
+        $this->assertTrue($this->stringable('1')->toBoolean());
+        $this->assertFalse($this->stringable('0')->toBoolean());
+        $this->assertTrue($this->stringable('on')->toBoolean());
+        $this->assertFalse($this->stringable('off')->toBoolean());
+        $this->assertTrue($this->stringable('yes')->toBoolean());
+        $this->assertFalse($this->stringable('no')->toBoolean());
+    }
+
+    public function testToDate()
+    {
+        $current = Carbon::create(2020, 1, 1, 16, 30, 25);
+
+        $this->assertEquals($current, $this->stringable('20-01-01 16:30:25')->toDate());
+        $this->assertEquals($current, $this->stringable('1577896225')->toDate('U'));
+        $this->assertEquals($current, $this->stringable('20-01-01 13:30:25')->toDate(null, 'America/Santiago'));
+
+        $this->assertTrue($this->stringable('2020-01-01')->toDate()->isSameDay($current));
+        $this->assertTrue($this->stringable('16:30:25')->toDate()->isSameSecond('16:30:25'));
+    }
+
+    public function testToDateThrowsException()
+    {
+        $this->expectException(\Carbon\Exceptions\InvalidFormatException::class);
+
+        $this->stringable('not a date')->toDate();
     }
 }

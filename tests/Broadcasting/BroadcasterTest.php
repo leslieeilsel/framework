@@ -322,7 +322,7 @@ class BroadcasterTest extends TestCase
         $this->assertEquals($shouldMatch, $this->broadcaster->channelNameMatchesPattern($channel, $pattern));
     }
 
-    public function channelNameMatchPatternProvider()
+    public static function channelNameMatchPatternProvider()
     {
         return [
             ['something', 'something', true],
@@ -330,12 +330,14 @@ class BroadcasterTest extends TestCase
             ['something.23.test', 'something.{id}.test', true],
             ['something.23.test.42', 'something.{id}.test.{id2}', true],
             ['something-23:test-42', 'something-{id}:test-{id2}', true],
-            ['something..test.42', 'something.{id}.test.{id2}', true],
+            ['something..test.42', 'something.{id}.test.{id2}', false],
             ['23:string:test', '{id}:string:{text}', true],
             ['something.23', 'something', false],
             ['something.23.test.42', 'something.test.{id}', false],
             ['something-23-test-42', 'something-{id}-test', false],
             ['23:test', '{id}:test:abcd', false],
+            ['customer.order.1', 'order.{id}', false],
+            ['customerorder.1', 'order.{id}', false],
         ];
     }
 }

@@ -7,7 +7,10 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Foundation\Testing\Concerns\InteractsWithDatabase;
+use Illuminate\Foundation\Testing\TestCase as TestingTestCase;
+use Illuminate\Support\Facades\DB;
 use Mockery as m;
+use Orchestra\Testbench\Concerns\CreatesApplication;
 use PHPUnit\Framework\ExpectationFailedException;
 use PHPUnit\Framework\TestCase;
 
@@ -132,6 +135,14 @@ class FoundationInteractsWithDatabaseTest extends TestCase
 
         $this->assertDatabaseCount(ProductStub::class, 1);
         $this->assertDatabaseCount(new ProductStub, 1);
+    }
+
+    public function testAssertDatabaseEmpty()
+    {
+        $this->mockCountBuilder(0);
+
+        $this->assertDatabaseEmpty(ProductStub::class);
+        $this->assertDatabaseEmpty(new ProductStub);
     }
 
     public function testAssertTableEntriesCountWrong()
@@ -312,6 +323,95 @@ class FoundationInteractsWithDatabaseTest extends TestCase
         $this->assertEquals($this->table, $this->getTable($this->table));
     }
 
+    public function testExpectsDatabaseQueryCount()
+    {
+        $case = new class extends TestingTestCase
+        {
+            use CreatesApplication;
+
+            public function testExpectsDatabaseQueryCount()
+            {
+                $this->expectsDatabaseQueryCount(0);
+            }
+        };
+
+        $case->setUp();
+        $case->testExpectsDatabaseQueryCount();
+        $case->tearDown();
+
+        $case = new class extends TestingTestCase
+        {
+            use CreatesApplication;
+
+            public function testExpectsDatabaseQueryCount()
+            {
+                $this->expectsDatabaseQueryCount(3);
+            }
+        };
+
+        $case->setUp();
+        $case->testExpectsDatabaseQueryCount();
+
+        try {
+            $case->tearDown();
+            $this->fail();
+        } catch (ExpectationFailedException $e) {
+            $this->assertSame("Expected 3 database queries on the [testing] connection. 0 occurred.\nFailed asserting that 3 is identical to 0.", $e->getMessage());
+        }
+
+        $case = new class extends TestingTestCase
+        {
+            use CreatesApplication;
+
+            public function testExpectsDatabaseQueryCount()
+            {
+                $this->expectsDatabaseQueryCount(3);
+
+                DB::pretend(function ($db) {
+                    $db->table('foo')->count();
+                    $db->table('foo')->count();
+                    $db->table('foo')->count();
+                    $db->table('foo')->count();
+                });
+            }
+        };
+
+        $case->setUp();
+        $case->testExpectsDatabaseQueryCount();
+
+        try {
+            $case->tearDown();
+            $this->fail();
+        } catch (ExpectationFailedException $e) {
+            $this->assertSame("Expected 3 database queries on the [testing] connection. 4 occurred.\nFailed asserting that 3 is identical to 4.", $e->getMessage());
+        }
+
+        $case = new class extends TestingTestCase
+        {
+            use CreatesApplication;
+
+            public function testExpectsDatabaseQueryCount()
+            {
+                $this->expectsDatabaseQueryCount(4);
+                $this->expectsDatabaseQueryCount(1, 'mysql');
+
+                DB::pretend(function ($db) {
+                    $db->table('foo')->count();
+                    $db->table('foo')->count();
+                    $db->table('foo')->count();
+                });
+
+                DB::connection('mysql')->pretend(function ($db) {
+                    $db->table('foo')->count();
+                });
+            }
+        };
+
+        $case->setUp();
+        $case->testExpectsDatabaseQueryCount();
+        $case->tearDown();
+    }
+
     protected function mockCountBuilder($countResult, $deletedAtColumn = 'deleted_at')
     {
         $builder = m::mock(Builder::class);
@@ -320,6 +420,8 @@ class FoundationInteractsWithDatabaseTest extends TestCase
         $value = $this->data[$key];
 
         $builder->shouldReceive('where')->with($key, $value)->andReturnSelf();
+
+        $builder->shouldReceive('select')->with(array_keys($this->data))->andReturnSelf();
 
         $builder->shouldReceive('limit')->andReturnSelf();
 

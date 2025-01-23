@@ -14,6 +14,8 @@ class MigratorTest extends TestCase
      */
     private $output;
 
+    public $subject;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -60,7 +62,7 @@ class MigratorTest extends TestCase
         $this->subject->getRepository()->log('2015_10_04_000000_modify_people_table', 1);
         $this->subject->getRepository()->log('2016_10_04_000000_modify_people_table', 1);
 
-        $this->expectInfo('Rollbacking migrations.');
+        $this->expectInfo('Rolling back migrations.');
 
         $this->expectTask('2016_10_04_000000_modify_people_table', 'DONE');
         $this->expectTask('2015_10_04_000000_modify_people_table', 'DONE');

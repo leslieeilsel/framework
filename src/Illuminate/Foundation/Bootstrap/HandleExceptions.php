@@ -7,7 +7,9 @@ use Exception;
 use Illuminate\Contracts\Debug\ExceptionHandler;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Log\LogManager;
+use Monolog\Formatter\JsonFormatter;
 use Monolog\Handler\NullHandler;
+use Monolog\Handler\SocketHandler;
 use Symfony\Component\Console\Output\ConsoleOutput;
 use Symfony\Component\ErrorHandler\Error\FatalError;
 use Throwable;
@@ -17,7 +19,7 @@ class HandleExceptions
     /**
      * Reserved memory so that errors can be displayed properly on memory exhaustion.
      *
-     * @var string
+     * @var string|null
      */
     public static $reservedMemory;
 
@@ -51,6 +53,10 @@ class HandleExceptions
         if (! $app->environment('testing')) {
             ini_set('display_errors', 'Off');
         }
+
+        if (laravel_cloud()) {
+            $this->configureCloudLogging($app);
+        }
     }
 
     /**
@@ -68,10 +74,8 @@ class HandleExceptions
     public function handleError($level, $message, $file = '', $line = 0, $context = [])
     {
         if ($this->isDeprecation($level)) {
-            return $this->handleDeprecationError($message, $file, $line, $level);
-        }
-
-        if (error_reporting() & $level) {
+            $this->handleDeprecationError($message, $file, $line, $level);
+        } elseif (error_reporting() & $level) {
             throw new ErrorException($message, 0, $level, $file, $line);
         }
     }
@@ -102,10 +106,7 @@ class HandleExceptions
      */
     public function handleDeprecationError($message, $file, $line, $level = E_DEPRECATED)
     {
-        if (! class_exists(LogManager::class)
-            || ! static::$app->hasBeenBootstrapped()
-            || static::$app->runningUnitTests()
-        ) {
+        if ($this->shouldIgnoreDeprecationErrors()) {
             return;
         }
 
@@ -131,6 +132,18 @@ class HandleExceptions
     }
 
     /**
+     * Determine if deprecation errors should be ignored.
+     *
+     * @return bool
+     */
+    protected function shouldIgnoreDeprecationErrors()
+    {
+        return ! class_exists(LogManager::class)
+            || ! static::$app->hasBeenBootstrapped()
+            || static::$app->runningUnitTests();
+    }
+
+    /**
      * Ensure the "deprecations" logger is configured.
      *
      * @return void
@@ -144,9 +157,11 @@ class HandleExceptions
 
             $this->ensureNullLogDriverIsConfigured();
 
-            $options = $config->get('logging.deprecations');
-
-            $driver = is_array($options) ? $options['channel'] : ($options ?? 'null');
+            if (is_array($options = $config->get('logging.deprecations'))) {
+                $driver = $options['channel'] ?? 'null';
+            } else {
+                $driver = $options ?? 'null';
+            }
 
             $config->set('logging.channels.deprecations', $config->get("logging.channels.{$driver}"));
         });
@@ -188,11 +203,15 @@ class HandleExceptions
         try {
             $this->getExceptionHandler()->report($e);
         } catch (Exception $e) {
-            //
+            $exceptionHandlerFailed = true;
         }
 
         if (static::$app->runningInConsole()) {
             $this->renderForConsole($e);
+
+            if ($exceptionHandlerFailed ?? false) {
+                exit(1);
+            }
         } else {
             $this->renderHttpResponse($e);
         }
@@ -244,6 +263,34 @@ class HandleExceptions
     protected function fatalErrorFromPhpError(array $error, $traceOffset = null)
     {
         return new FatalError($error['message'], 0, $error, $traceOffset);
+    }
+
+    /**
+     * Configure the Laravel Cloud log channels.
+     *
+     * @param  \Illuminate\Contracts\Foundation\Application  $app
+     * @return void
+     */
+    protected function configureCloudLogging(Application $app)
+    {
+        $app['config']->set('logging.channels.stderr.formatter_with', [
+            'includeStacktraces' => true,
+        ]);
+
+        $app['config']->set('logging.channels.laravel-cloud-socket', [
+            'driver' => 'monolog',
+            'handler' => SocketHandler::class,
+            'formatter' => JsonFormatter::class,
+            'formatter_with' => [
+                'includeStacktraces' => true,
+            ],
+            'with' => [
+                'connectionString' => $_ENV['LARAVEL_CLOUD_LOG_SOCKET'] ??
+                                      $_SERVER['LARAVEL_CLOUD_LOG_SOCKET'] ??
+                                      'unix:///tmp/cloud-init.sock',
+                'persistent' => true,
+            ],
+        ]);
     }
 
     /**
